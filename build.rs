@@ -9,6 +9,12 @@ use tokio::fs;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut namespaces = vec![];
+
+    let path_ext_dir = Path::new("src").join("ext");
+    if !path_ext_dir.exists() {
+        fs::create_dir(&path_ext_dir).await?;
+    }
+
     for (space, url) in webext_parser::api_pages().await?.iter() {
         /* if space != "windows" {
             continue;
