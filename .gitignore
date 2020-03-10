@@ -2,5 +2,6 @@
 **/*.rs.bk
 Cargo.lock
 .vscode
-src/ext/*.rs
+src/ext/*
+src/ext.rs
 cache
