@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::prelude::*;
+use webext_parser::api::{Namespace, TypeKind};
 
 fn get_dir() -> PathBuf {
     Path::new("src").join("ext")
@@ -49,6 +50,71 @@ async fn create_subnamespace(names: &[&str]) -> Result<PathBuf, Box<dyn std::err
     Ok(path)
 }
 
+fn construct_module(namespace: &Namespace) -> String {
+    let mut outside = String::new();
+    let mut result = String::new();
+    result.push_str(
+        r#"use wasm_bindgen::prelude::*;
+#[allow(unused_imports)]
+use crate::ext as chrome;
+#[allow(unused_imports)]
+use js_sys::*;
+
+#[wasm_bindgen]
+extern "C" {
+"#,
+    );
+
+    for js_type in namespace.types().iter() {
+        match js_type.kind() {
+            TypeKind::Enum => {
+                outside.push_str("pub type ");
+                outside.push_str(js_type.name());
+                outside.push_str(" = String;\n");
+            }
+
+            TypeKind::Data => {
+                outside.push_str("pub type ");
+                outside.push_str(js_type.name());
+                outside.push_str(" = JsValue;\n");
+            }
+
+            TypeKind::Struct {
+                ref elements,
+                ref optional_elements,
+                ref methods,
+            } => {
+                result.push_str("    type ");
+                result.push_str(js_type.name());
+                result.push_str(";\n");
+                for element in elements.iter() {
+                    result.push_str(&format!(
+                        r#"    #[wasm_bindgen(structural, catch, method, getter, js_class = "{}", js_name = {})]"#,
+                        js_type.name(), element.name()
+                    ));
+                    result.push_str("\n");
+                    result.push_str("    fn get_");
+                    result.push_str(&element.name().to_snake_case());
+                    result.push_str("(this: &");
+                    result.push_str(js_type.name());
+                    result.push_str(") -> Result<");
+                    if element.is_array() {
+                        result.push_str("Box<[JsValue]>");
+                    } else {
+                        result.push_str(element.rustify_type());
+                    }
+                    result.push_str(", JsValue>;\n");
+                }
+            }
+        }
+    }
+
+    result.push_str("}\n\n");
+    result.push_str(&outside);
+
+    result
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut namespaces = HashSet::new();
@@ -75,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             path
         };
 
-        fs::write(&path, "\n").await?;
+        fs::write(&path, &construct_module(&namespace)).await?;
     }
 
     let path_root = Path::new("src").join("ext.rs");
@@ -83,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &path_root,
         namespaces
             .iter()
-            .map(|s| format!("#[cfg({})]\npub mod {};", &s, &s))
+            .map(|s| format!("#[cfg(feature=\"{}\")]\npub mod {};", &s, &s))
             .fold(String::new(), |acc, x| format!("{}{}\n", acc, x)),
     )
     .await?;

@@ -1,3 +1,6 @@
+extern crate js_sys;
+extern crate wasm_bindgen;
+
 pub mod ext;
 
 #[cfg(test)]
