@@ -89,8 +89,8 @@ extern "C" {
                 result.push_str(";\n");
                 for element in elements.iter() {
                     result.push_str(&format!(
-                        r#"    #[wasm_bindgen(structural, catch, method, getter, js_class = "{}", js_name = {})]"#,
-                        js_type.name(), element.name()
+                        r#"    #[wasm_bindgen(structural, catch, method, getter, js_namespace = "{}", js_class = "{}", js_name = {})]"#,
+                        namespace.name(), js_type.name(), element.name()
                     ));
                     result.push_str("\n");
                     result.push_str("    fn get_");
@@ -117,6 +117,7 @@ extern "C" {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed=build.rs");
     let mut namespaces = HashSet::new();
 
     let path_ext_dir = get_dir();
